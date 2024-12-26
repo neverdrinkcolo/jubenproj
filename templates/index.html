@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>台词台本转换工具</title>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            margin: 0; 
+            padding: 0; 
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+        .container { 
+            max-width: 800px; 
+            margin: 0 auto; 
+            flex: 1; 
+            padding: 20px;
+            width: 100%; /* Ensure the container takes full width */
+        }
+        .tabs { 
+            display: flex; 
+            border-bottom: 1px solid #ccc; 
+        }
+        .tab { 
+            padding: 10px 20px; 
+            cursor: pointer; 
+            border: 1px solid #ccc; 
+            border-bottom: none; 
+            background-color: #f1f1f1; 
+            transition: background-color 0.3s;
+            position: relative; /* Add position relative for pseudo-element */
+        }
+        .tab.active { 
+            background-color: white; 
+            border-top: 2px solid #007BFF; /* Highlight active tab */
+        }
+        .tab.active::after {
+            content: '';
+            position: absolute;
+            left: 0;
+            right: 0;
+            bottom: -1px; /* Adjust based on your design needs */
+            height: 2px;
+            background-color: #ffffff;
+        }
+        .tab-content { 
+            display: none; 
+            padding: 20px; 
+            border: 1px solid #ccc; 
+            border-top: none; 
+        }
+        .tab-content.active { 
+            display: block; 
+        }
+        .form-group { 
+            margin-bottom: 15px; 
+        }
+        label { 
+            display: block; 
+            margin-bottom: 5px; 
+        }
+        input[type="text"] { 
+            width: 100%; 
+            padding: 5px; 
+        }
+        textarea {
+            width: 100%;
+            padding: 5px;
+        }
+        button { 
+            padding: 5px 10px; /* Slightly larger than text */
+            cursor: pointer;
+            border: 1px solid #007BFF;
+            background-color: #007BFF;
+            color: white;
+            border-radius: 4px;
+            width: fit-content; /* Ensures the button width fits its content */
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        #status { 
+            margin-top: 20px; 
+            padding: 10px; 
+            background-color: #f0f0f0; 
+        }
+        .modal { 
+            display: none; 
+            position: fixed; 
+            z-index: 1; 
+            left: 0; 
+            top: 0; 
+            width: 100%; 
+            height: 100%; 
+            overflow: auto; 
+            background-color: rgba(0,0,0,0.4); 
+        }
+        .modal-content { 
+            background-color: #fefefe; 
+            margin: 15% auto; 
+            padding: 20px; 
+            border: 1px solid #888; 
+            width: 80%; 
+        }
+        .close { 
+            color: #aaa; 
+            float: right; 
+            font-size: 28px; 
+            font-weight: bold; 
+        }
+        .close:hover, .close:focus { 
+            color: black; 
+            text-decoration: none; 
+            cursor: pointer; 
+        }
+        .button-container { 
+            display: flex; 
+            justify-content: space-between; 
+            margin-top: 10px; 
+        }
+        .header-container { 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+        }
+        .header-container h1 { 
+            margin: 0; 
+        } /* Remove default margin from h1 */
+        .file-info { 
+            margin-top: 10px; 
+        }
+        .footer {
+            text-align: center;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-top: 1px solid #ddd;
+            width: 100%;
+        }
+
+        /* Additional styling for spacing between buttons */
+        .header-container button + button {
+            margin-left: 10px; /* Adjust the margin as needed */
+        }
+
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header-container">
+            <h1>台词台本转换工具</h1>
+            <div class="button-container">
+                <button onclick="savePromptsFromMainPage()">保存提示词</button>
+                <button onclick="openSettingsDialog()">设置</button>
+                
+            </div>
+        </div>
+
+        <div class="tabs">
+            <div class="tab active" onclick="showTab(event, 'ctb-tab')">台词转台本</div>
+            <div class="tab" onclick="showTab(event, 'btc-tab')">台本转台词</div>
+        </div>
+
+        <div id="ctb-tab" class="tab-content active">
+            <div class="form-group">
+                <label for="ctb_prompt">提示词:</label>
+                <textarea id="ctb_prompt" rows="10"></textarea>
+                <div class="button-container">
+                    <input type="file" id="ctb_files" multiple style="display:none;" onchange="handleFileSelect(this, 'ctb')">
+                    <button onclick="document.getElementById('ctb_files').click();">上传文件</button>
+                    <button id="run_ctb_button" disabled onclick="runCTB()" style="background-color: gray;">运行</button>
+                    <button onclick="openFolder('ctb_output')">查看结果</button>
+                </div>
+                <div class="file-info" id="ctb_file_info"></div>
+            </div>
+        </div>
+
+        <div id="btc-tab" class="tab-content">
+            <div class="form-group">
+                <label for="btc_prompt">提示词:</label>
+                <textarea id="btc_prompt" rows="30"></textarea>
+                <div class="button-container">
+                    <input type="file" id="btc_file" multiple style="display:none;" accept=".docx" onchange="handleFileSelect(this, 'btc')">
+                    <button onclick="document.getElementById('btc_file').click();">上传文件</button>
+                    <button id="run_btc_button" disabled onclick="runBTC()" style="background-color: gray;">运行</button>
+                    <button onclick="openFolder('btc_output')">查看结果</button>
+                </div>
+                <div class="file-info" id="btc_file_info"></div>
+            </div>
+        </div>
+
+        <div id="status"></div>
+    </div>
+
+    <div id="settingsModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeSettingsDialog()">&times;</span>
+            <h2>设置</h2>
+            <div class="form-group">
+                <label for="setting_base_url">BASE Url:</label>
+                <input type="text" id="setting_base_url" placeholder="">
+            </div>
+            <div class="form-group">
+                <label for="setting_api_key">API Key:</label>
+                <input type="text" id="setting_api_key" placeholder="填入你的APIkey">
+            </div>
+            <div class="form-group">
+                <label for="setting_model_version">模型版本:</label>
+                <select id="setting_model_version">
+                    <option value="gpt-4o-mini">gpt-4o-mini</option>
+                    <option value="gpt-3.5-turbo">gpt-3.5-turbo</option>
+                    <option value="gpt-4o">gpt-4o</option>
+                    <option value="gpt-4">gpt-4</option>
+                    <!-- 添加更多模型选项 -->
+                </select>
+            </div>
+            
+            <button onclick="saveSettings()">保存所有设置</button>
+        </div>
+    </div>
+
+    <script>
+        let settings = {};
+
+        function openSettingsDialog() {
+            axios.get('/load_settings')
+                .then(response => {
+                    settings = response.data;
+                    document.getElementById('setting_api_key').value = settings.api_key;
+                    document.getElementById('setting_model_version').value = settings.model_version;
+                    document.getElementById('setting_base_url').value = settings.base_url;
+                })
+                .catch(error => {
+                    console.error('Error loading settings:', error);
+                });
+
+            document.getElementById('settingsModal').style.display = 'block';
+        }
+
+        function closeSettingsDialog() {
+            document.getElementById('settingsModal').style.display = 'none';
+        }
+
+        function saveSettings() {
+            const newSettings = {
+                api_key: document.getElementById('setting_api_key').value,
+                model_version: document.getElementById('setting_model_version').value,
+                base_url: document.getElementById('setting_base_url').value,
+                
+            };
+
+            axios.post('/update_settings', newSettings)
+                .then(response => {
+                    if (response.data.success) {
+                        updateStatus('设置已保存');
+                        closeSettingsDialog();
+                    } else {
+                        updateStatus('保存设置失败: ' + response.data.error);
+                    }
+                })
+                .catch(error => {
+                    updateStatus('保存设置过程中发生错误');
+                    console.error('Error:', error);
+                });
+        }
+
+        function savePromptsFromMainPage() {
+            const ctbPrompt = document.getElementById('ctb_prompt').value;
+            const btcPrompt = document.getElementById('btc_prompt').value;
+
+            const newPrompts = {
+                ctb_prompt: ctbPrompt,
+                btc_prompt: btcPrompt
+            };
+
+            axios.post('/update_prompts', newPrompts)
+                .then(response => {
+                    if (response.data.success) {
+                        updateStatus('提示词已保存');
+                    } else {
+                        updateStatus('保存提示词失败: ' + response.data.error);
+                    }
+                })
+                .catch(error => {
+                    updateStatus('保存提示词过程中发生错误');
+                    console.error('Error:', error);
+                });
+        }
+
+        function updateStatus(message) {
+            document.getElementById('status').innerText = message;
+        }
+
+        
+
+        function showTab(evt, tabName) {
+            // Get all elements with class="tabcontent" and hide them
+            var i, tabcontent, tablinks;
+            tabcontent = document.getElementsByClassName("tab-content");
+            for (i = 0; i < tabcontent.length; i++) {
+                tabcontent[i].classList.remove("active");
+            }
+
+            // Get all elements with class="tablinks" and remove the class "active"
+            tablinks = document.getElementsByClassName("tab");
+            for (i = 0; i < tablinks.length; i++) {
+                tablinks[i].classList.remove("active");
+            }
+
+            // Show the current tab, and add an "active" class to the button that opened the tab
+            document.getElementById(tabName).classList.add("active");
+            evt.currentTarget.classList.add("active");
+        }
+
+        function handleFileSelect(input, prefix) {
+            const files = input.files;
+            const fileInfoDiv = document.getElementById(prefix + '_file_info');
+            if (files.length > 0) {
+                fileInfoDiv.innerText = Array.from(files).map(file => file.name).join(', ');
+                document.getElementById(`run_${prefix}_button`).disabled = false;
+                document.getElementById(`run_${prefix}_button`).style.backgroundColor = '#007BFF';
+            } else {
+                fileInfoDiv.innerText = '';
+                document.getElementById(`run_${prefix}_button`).disabled = true;
+                document.getElementById(`run_${prefix}_button`).style.backgroundColor = 'gray';
+            }
+        }
+
+        let progressInterval;
+
+        function runCTB() {
+            const apiKey = settings.api_key;
+            const base_url = settings.base_url;
+            const prompt = document.getElementById('ctb_prompt').value;
+            const files = document.getElementById('ctb_files').files;
+
+            if (!apiKey) {
+                updateStatus('请先设置 API Key');
+                return;
+            }
+
+            if (files.length === 0) {
+                updateStatus('请选择文件');
+                return;
+            }
+
+            updateStatus('正在运行台词转台本...');
+
+            const formData = new FormData();
+            formData.append('api_key', apiKey);
+            formData.append('base_url', base_url);
+            formData.append('prompt', prompt);
+
+            for (let i = 0; i < files.length; i++) {
+                formData.append('files[]', files[i]);
+            }
+
+            axios.post('/ctb_process', formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data'
+                }
+            })
+                .then(response => {
+                    if (response.data.success) {
+                        clearInterval(progressInterval);
+                        updateStatus(response.data.message);
+                    } else {
+                        clearInterval(progressInterval);
+                        updateStatus('处理失败: ' + response.data.error);
+                    }
+                })
+                .catch(error => {
+                    clearInterval(progressInterval);
+                    updateStatus('请求失败: ' + error.message);
+                });
+
+            // 获取时间戳
+            const timestamp = new Date().toISOString().replace(/[-:.]/g, '').slice(0, 17); // 使用微秒级时间戳
+
+            // 开始轮询进度
+            progressInterval = setInterval(() => {
+                axios.get(`/get_progress/${timestamp}`)
+                    .then(response => {
+                        const data = response.data;
+                        updateStatus(`正在处理,请耐心等待。。。如果等待时间过长可以查看结果文件夹是否已经有结果了`);
+                    })
+                    .catch(error => {
+                        console.error('获取进度失败:', error);
+                    });
+            }, 5000); // 每5秒请求一次进度
+        }
+
+        function runBTC() {
+            const apiKey = settings.api_key;
+            const base_url = settings.base_url;
+            const prompt = document.getElementById('btc_prompt').value;
+            const file = document.getElementById('btc_file').files[0];
+
+            if (!apiKey) {
+                updateStatus('请先设置 API Key');
+                return;
+            }
+
+            if (!file) {
+                updateStatus('请选择文件');
+                return;
+            }
+
+            updateStatus('正在运行台本转台词...');
+
+            const formData = new FormData();
+            formData.append('api_key', apiKey);
+            formData.append('base_url', base_url);
+            formData.append('prompt', prompt);
+            formData.append('file', file);
+
+            axios.post('/btc_process', formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data'
+                }
+            })
+                .then(response => {
+                    if (response.data.success) {
+                        clearInterval(progressInterval);
+                        updateStatus(response.data.message);
+                    } else {
+                        clearInterval(progressInterval);
+                        updateStatus('处理失败: ' + response.data.error);
+                    }
+                })
+                .catch(error => {
+                    clearInterval(progressInterval);
+                    updateStatus('请求失败: ' + error.message);
+                });
+
+            // 获取时间戳
+            const timestamp = new Date().toISOString().replace(/[-:.]/g, '').slice(0, 17); // 使用微秒级时间戳
+
+            // 开始轮询进度
+            progressInterval = setInterval(() => {
+                axios.get(`/get_progress/${timestamp}`)
+                    .then(response => {
+                        const data = response.data;
+                        updateStatus(`正在处理，请耐心等待。。。。如果等待时间过长可以查看结果文件夹是否已经有结果了`);
+
+                    })
+                    .catch(error => {
+                        console.error('获取进度失败:', error);
+                    });
+            }, 5000); // 每5秒请求一次进度
+        }
+
+        function updateStatus(message) {
+            document.getElementById('status').innerText = message;
+        }
+
+
+        function openFolder(folderName) {
+            axios.get(`/open_folder/${folderName}`)
+                .then(response => {
+                    if (response.data.success) {
+                        updateStatus(response.data.message);
+                    } else {
+                        updateStatus('打开文件夹失败: ' + response.data.error);
+                    }
+                })
+                .catch(error => {
+                    updateStatus('打开文件夹过程中发生错误');
+                    console.error('Error:', error);
+                });
+        }
+
+        function handleFileSelect(input, type) {
+            const files = input.files;
+            let fileInfoDiv = document.getElementById(`${type}_file_info`);
+            let runButton = document.getElementById(`run_${type}_button`);
+
+            if (files.length > 0) {
+                fileInfoDiv.innerText = `${files[0].name}${files.length > 1 ? ` (+${files.length - 1})` : ''}`;
+                runButton.style.backgroundColor = 'green';
+                runButton.disabled = false;
+            } else {
+                fileInfoDiv.innerText = '';
+                runButton.style.backgroundColor = 'gray';
+                runButton.disabled = true;
+            }
+        }
+
+        axios.get('/get_default_prompts')
+            .then(response => {
+                document.getElementById('ctb_prompt').value = response.data.ctb_prompt;
+                document.getElementById('btc_prompt').value = response.data.btc_prompt;
+            })
+            .catch(error => {
+                console.error('Error getting default prompts:', error);
+                updateStatus('获取默认提示词失败');
+            });
+
+        // 加载已保存的设置
+        axios.get('/load_settings')
+            .then(response => {
+                settings.api_key = response.data.api_key || '';
+                settings.model_version = response.data.model_version || '';
+                document.getElementById('setting_api_key').value = settings.api_key;
+                document.getElementById('setting_model_version').value = settings.model_version;
+                document.getElementById('setting_base_url').value = settings.base_url;
+            })
+            .catch(error => {
+                console.error('Error loading settings:', error);
+                updateStatus('加载设置失败');
+            });
+    </script>
+
+    <div class="footer">
+        <!-- 关闭程序的按钮 -->
+        <button id="shutdownButton">关闭程序</button>
+    </div>
+
+
+    <script>
+        document.getElementById('shutdownButton').addEventListener('click', function() {
+            fetch('/shutdown', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('程序已关闭');
+                    // 可以在这里添加其他操作，比如重定向或刷新页面
+                } else {
+                    alert('关闭失败: ' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('已关闭');
+            });
+        });
+    </script>
+
+</body>
+</html>
+
+
+
